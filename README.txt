@@ -1,1 +1,0 @@
-Este es el proyecto dedicado a la realización de un invernadero para el módulo Proyecto Intermodular del Instituto I.E.S Valle del Jerte Cabezuela, Ciclo Sistemas Microinformáticos y Redes.

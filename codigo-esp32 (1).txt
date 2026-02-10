@@ -1,0 +1,487 @@
+/*
+ * ========================================
+ * INVERNADERO INTELIGENTE - ESP32 IoT
+ * ========================================
+ * 
+ * Proyecto: Sistema de monitoreo y control de invernadero
+ * Hardware: ESP32 + DHT11 + Sensor Humedad Suelo + Relé
+ * Dashboard: Interfaz web responsive con datos en tiempo real
+ * 
+ * Autor: Proyecto de Robótica Educativa
+ * Fecha: 2026
+ */
+
+// ========== LIBRERÍAS ==========
+#include <WiFi.h>
+#include <WebServer.h>
+#include <DHT.h>
+#include <ArduinoJson.h>
+
+// ========== CONFIGURACIÓN WiFi ==========
+const char* ssid = "TU_NOMBRE_WIFI";           // 👈 CAMBIA ESTO
+const char* password = "TU_CONTRASEÑA_WIFI";   // 👈 CAMBIA ESTO
+
+// ========== PINES DE HARDWARE ==========
+#define DHTPIN 4              // GPIO4 -> Sensor DHT11 (DATA)
+#define DHTTYPE DHT11         // Tipo de sensor
+#define SOIL_SENSOR_PIN 34    // GPIO34 -> Sensor Humedad Suelo (A0)
+#define RELAY_PIN 26          // GPIO26 -> Módulo Relé (IN1)
+
+// ========== CONFIGURACIÓN DEL SISTEMA ==========
+const int UMBRAL_SECO = 30;           // Porcentaje mínimo para activar riego
+const int TIEMPO_RIEGO = 3000;        // Milisegundos de riego (3 segundos)
+const unsigned long INTERVALO_LECTURA = 2000;  // Leer sensores cada 2 segundos
+
+// ========== OBJETOS GLOBALES ==========
+DHT dht(DHTPIN, DHTTYPE);
+WebServer server(80);
+
+// ========== VARIABLES DE ESTADO ==========
+struct SensorData {
+    float temperatura;
+    float humedad;
+    int humedadSuelo;
+    unsigned long ultimaLectura;
+} sensores;
+
+struct SystemState {
+    bool bombaActiva;
+    String modo;  // "auto" o "manual"
+    unsigned long tiempoInicioRiego;
+    bool rigoEnProceso;
+} sistema;
+
+// ========================================
+// SETUP - INICIALIZACIÓN
+// ========================================
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+    
+    Serial.println("\n\n========================================");
+    Serial.println("🌱 INVERNADERO INTELIGENTE - ESP32");
+    Serial.println("========================================\n");
+    
+    // Configurar pines
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, LOW);  // Relé apagado (normalmente LOW = OFF)
+    
+    // Inicializar sensor DHT11
+    dht.begin();
+    Serial.println("✓ Sensor DHT11 inicializado");
+    
+    // Estado inicial del sistema
+    sistema.bombaActiva = false;
+    sistema.modo = "auto";
+    sistema.rigoEnProceso = false;
+    sistema.tiempoInicioRiego = 0;
+    
+    // Conectar a WiFi
+    conectarWiFi();
+    
+    // Configurar rutas del servidor web
+    configurarServidor();
+    
+    // Iniciar servidor
+    server.begin();
+    Serial.println("✓ Servidor web iniciado");
+    Serial.println("\n========================================");
+    Serial.println("📱 DASHBOARD LISTO");
+    Serial.println("========================================");
+    Serial.print("🌐 Accede desde tu móvil a: http://");
+    Serial.println(WiFi.localIP());
+    Serial.println("========================================\n");
+}
+
+// ========================================
+// LOOP PRINCIPAL
+// ========================================
+void loop() {
+    // Manejar peticiones HTTP
+    server.handleClient();
+    
+    // Leer sensores cada 2 segundos
+    if (millis() - sensores.ultimaLectura >= INTERVALO_LECTURA) {
+        leerSensores();
+        sensores.ultimaLectura = millis();
+        
+        // Mostrar datos en Serial
+        imprimirDatos();
+    }
+    
+    // Lógica de riego automático
+    if (sistema.modo == "auto") {
+        controlarRiegoAutomatico();
+    }
+    
+    // Controlar tiempo de riego
+    if (sistema.rigoEnProceso) {
+        if (millis() - sistema.tiempoInicioRiego >= TIEMPO_RIEGO) {
+            apagarBomba();
+        }
+    }
+}
+
+// ========================================
+// FUNCIÓN: CONECTAR WiFi
+// ========================================
+void conectarWiFi() {
+    Serial.print("📡 Conectando a WiFi: ");
+    Serial.println(ssid);
+    
+    WiFi.begin(ssid, password);
+    
+    int intentos = 0;
+    while (WiFi.status() != WL_CONNECTED && intentos < 30) {
+        delay(500);
+        Serial.print(".");
+        intentos++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n✓ WiFi conectado exitosamente!");
+        Serial.print("📍 Dirección IP: ");
+        Serial.println(WiFi.localIP());
+        Serial.print("📶 Intensidad señal: ");
+        Serial.print(WiFi.RSSI());
+        Serial.println(" dBm");
+    } else {
+        Serial.println("\n❌ Error: No se pudo conectar a WiFi");
+        Serial.println("Verifica el nombre y contraseña de tu red");
+    }
+}
+
+// ========================================
+// FUNCIÓN: LEER SENSORES
+// ========================================
+void leerSensores() {
+    // Leer DHT11 (Temperatura y Humedad Ambiental)
+    sensores.temperatura = dht.readTemperature();
+    sensores.humedad = dht.readHumidity();
+    
+    // Verificar si la lectura es válida
+    if (isnan(sensores.temperatura) || isnan(sensores.humedad)) {
+        Serial.println("⚠️ Error leyendo sensor DHT11");
+        sensores.temperatura = 0;
+        sensores.humedad = 0;
+    }
+    
+    // Leer sensor de humedad del suelo (analógico)
+    int valorAnalogico = analogRead(SOIL_SENSOR_PIN);
+    
+    // Convertir a porcentaje (0-4095 -> 0-100%)
+    // NOTA: Calibra estos valores según tu sensor
+    // Valores típicos: Seco=3500-4095, Húmedo=1000-1500
+    sensores.humedadSuelo = map(valorAnalogico, 4095, 1000, 0, 100);
+    sensores.humedadSuelo = constrain(sensores.humedadSuelo, 0, 100);
+}
+
+// ========================================
+// FUNCIÓN: CONTROL AUTOMÁTICO DE RIEGO
+// ========================================
+void controlarRiegoAutomatico() {
+    // Si el suelo está seco y la bomba no está activa
+    if (sensores.humedadSuelo < UMBRAL_SECO && !sistema.bombaActiva && !sistema.rigoEnProceso) {
+        Serial.println("\n🚨 ALERTA: Suelo seco detectado");
+        Serial.println("💦 Activando riego automático...");
+        encenderBomba();
+    }
+}
+
+// ========================================
+// FUNCIONES: CONTROL DE BOMBA
+// ========================================
+void encenderBomba() {
+    digitalWrite(RELAY_PIN, HIGH);  // Activar relé
+    sistema.bombaActiva = true;
+    sistema.rigoEnProceso = true;
+    sistema.tiempoInicioRiego = millis();
+    Serial.println("✓ Bomba ENCENDIDA");
+}
+
+void apagarBomba() {
+    digitalWrite(RELAY_PIN, LOW);   // Desactivar relé
+    sistema.bombaActiva = false;
+    sistema.rigoEnProceso = false;
+    Serial.println("✓ Bomba APAGADA");
+}
+
+// ========================================
+// FUNCIÓN: IMPRIMIR DATOS EN SERIAL
+// ========================================
+void imprimirDatos() {
+    Serial.println("\n--- LECTURA DE SENSORES ---");
+    Serial.print("🌡️  Temperatura: ");
+    Serial.print(sensores.temperatura);
+    Serial.println(" °C");
+    
+    Serial.print("💧 Humedad Aire: ");
+    Serial.print(sensores.humedad);
+    Serial.println(" %");
+    
+    Serial.print("🌱 Humedad Suelo: ");
+    Serial.print(sensores.humedadSuelo);
+    Serial.println(" %");
+    
+    Serial.print("💦 Bomba: ");
+    Serial.println(sistema.bombaActiva ? "ENCENDIDA" : "APAGADA");
+    
+    Serial.print("🤖 Modo: ");
+    Serial.println(sistema.modo);
+    Serial.println("---------------------------");
+}
+
+// ========================================
+// CONFIGURACIÓN DEL SERVIDOR WEB
+// ========================================
+void configurarServidor() {
+    // Ruta principal: Servir el dashboard
+    server.on("/", HTTP_GET, []() {
+        server.send(200, "text/html", paginaHTML());
+    });
+    
+    // Endpoint: Obtener datos de sensores (GET)
+    server.on("/data", HTTP_GET, []() {
+        StaticJsonDocument<256> doc;
+        
+        doc["temperature"] = sensores.temperatura;
+        doc["humidity"] = sensores.humedad;
+        doc["soil"] = sensores.humedadSuelo;
+        doc["pumpActive"] = sistema.bombaActiva;
+        doc["mode"] = sistema.modo;
+        doc["timestamp"] = millis();
+        
+        String json;
+        serializeJson(doc, json);
+        
+        // Headers CORS para permitir peticiones desde cualquier origen
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.send(200, "application/json", json);
+    });
+    
+    // Endpoint: Recibir comandos de control (POST)
+    server.on("/control", HTTP_POST, []() {
+        if (server.hasArg("plain")) {
+            String body = server.arg("plain");
+            
+            StaticJsonDocument<128> doc;
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                server.send(400, "application/json", "{\"error\":\"JSON inválido\"}");
+                return;
+            }
+            
+            String command = doc["command"];
+            
+            // Comando: Cambiar modo
+            if (command == "mode") {
+                sistema.modo = doc["value"].as<String>();
+                Serial.print("📝 Modo cambiado a: ");
+                Serial.println(sistema.modo);
+                
+                server.sendHeader("Access-Control-Allow-Origin", "*");
+                server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"" + sistema.modo + "\"}");
+            }
+            // Comando: Control manual de bomba
+            else if (command == "pump") {
+                if (sistema.modo == "manual") {
+                    bool activate = doc["value"];
+                    
+                    if (activate && !sistema.bombaActiva) {
+                        encenderBomba();
+                    } else if (!activate && sistema.bombaActiva) {
+                        apagarBomba();
+                    }
+                    
+                    server.sendHeader("Access-Control-Allow-Origin", "*");
+                    server.send(200, "application/json", "{\"status\":\"ok\",\"pump\":" + String(sistema.bombaActiva ? "true" : "false") + "}");
+                } else {
+                    server.sendHeader("Access-Control-Allow-Origin", "*");
+                    server.send(400, "application/json", "{\"error\":\"Bomba en modo automático\"}");
+                }
+            }
+            else {
+                server.sendHeader("Access-Control-Allow-Origin", "*");
+                server.send(400, "application/json", "{\"error\":\"Comando desconocido\"}");
+            }
+        }
+    });
+    
+    // Manejar OPTIONS para CORS
+    server.on("/control", HTTP_OPTIONS, []() {
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+        server.send(204);
+    });
+    
+    // Ruta no encontrada
+    server.onNotFound([]() {
+        server.send(404, "text/plain", "404: Página no encontrada");
+    });
+}
+
+// ========================================
+// FUNCIÓN: PÁGINA HTML DEL DASHBOARD
+// ========================================
+String paginaHTML() {
+    return R"rawliteral(
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invernadero IoT - Control Local</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a3a2f 0%, #2d5a47 100%);
+            color: white;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .status { font-size: 0.9rem; opacity: 0.9; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .card {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .sensor-value {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+        .control-btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 0.5rem;
+        }
+        .btn-auto {
+            background: #10b981;
+            color: white;
+        }
+        .btn-manual {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-pump {
+            background: #f59e0b;
+            color: white;
+        }
+        .btn-off {
+            background: #6b7280;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌱 Invernadero Inteligente</h1>
+            <p class="status">Dashboard Local ESP32</p>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <div>🌡️ Temperatura</div>
+                <div class="sensor-value" id="temp">--°C</div>
+            </div>
+            
+            <div class="card">
+                <div>💧 Humedad Aire</div>
+                <div class="sensor-value" id="humidity">--%</div>
+            </div>
+            
+            <div class="card">
+                <div>🌱 Humedad Suelo</div>
+                <div class="sensor-value" id="soil">--%</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 1rem;">⚙️ Control</h3>
+            <button class="control-btn btn-auto" onclick="setMode('auto')">🤖 Modo Automático</button>
+            <button class="control-btn btn-manual" onclick="setMode('manual')">👆 Modo Manual</button>
+            <button class="control-btn btn-pump" id="pumpBtn" onclick="togglePump()">💦 Bomba: OFF</button>
+            <p style="margin-top: 1rem; font-size: 0.9rem;">Modo actual: <span id="modeText">Automático</span></p>
+        </div>
+    </div>
+    
+    <script>
+        let currentMode = 'auto';
+        let pumpActive = false;
+        
+        function updateData() {
+            fetch('/data')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('temp').textContent = data.temperature.toFixed(1) + '°C';
+                    document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
+                    document.getElementById('soil').textContent = data.soil + '%';
+                    
+                    currentMode = data.mode;
+                    pumpActive = data.pumpActive;
+                    
+                    document.getElementById('modeText').textContent = 
+                        currentMode === 'auto' ? 'Automático' : 'Manual';
+                    document.getElementById('pumpBtn').textContent = 
+                        '💦 Bomba: ' + (pumpActive ? 'ON' : 'OFF');
+                    document.getElementById('pumpBtn').className = 
+                        'control-btn ' + (pumpActive ? 'btn-pump' : 'btn-off');
+                })
+                .catch(err => console.error('Error:', err));
+        }
+        
+        function setMode(mode) {
+            fetch('/control', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command: 'mode', value: mode})
+            }).then(() => updateData());
+        }
+        
+        function togglePump() {
+            if (currentMode !== 'manual') {
+                alert('Cambia a modo manual primero');
+                return;
+            }
+            fetch('/control', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command: 'pump', value: !pumpActive})
+            }).then(() => updateData());
+        }
+        
+        updateData();
+        setInterval(updateData, 2000);
+    </script>
+</body>
+</html>
+)rawliteral";
+}

@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invernadero IoT - Modo Demostración</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --leaf-dark: #1a3a2f;
+            --leaf-mid: #2d5a47;
+            --leaf-light: #4a7c62;
+            --cream: #f5f2eb;
+            --cream-dark: #e8e4da;
+            --demo-orange: #f59e0b;
+            --text-dark: #1a1a18;
+            --text-muted: #5a5a55;
+            --white: #ffffff;
+            --shadow-soft: 0 4px 20px rgba(26, 58, 47, 0.08);
+            --shadow-medium: 0 8px 40px rgba(26, 58, 47, 0.12);
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--cream);
+            color: var(--text-dark);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Fraunces', serif;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        /* Pantalla de Inicio */
+        #startScreen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            background: linear-gradient(165deg, var(--demo-orange) 0%, #d97706 50%, #7c3aed 100%);
+        }
+
+        .start-card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
+            border-radius: var(--radius-lg);
+            padding: 3rem 2rem;
+            max-width: 550px;
+            width: 100%;
+            box-shadow: var(--shadow-medium);
+            text-align: center;
+        }
+
+        .start-icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--demo-orange), #d97706);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        .start-card h1 {
+            font-size: 2.2rem;
+            color: var(--leaf-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .start-card .subtitle {
+            font-size: 1.1rem;
+            color: var(--demo-orange);
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .start-card p {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+
+        .btn-start {
+            width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, var(--demo-orange), #d97706);
+            color: var(--white);
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
+        }
+
+        .demo-features {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(245, 158, 11, 0.05);
+            border-radius: var(--radius-sm);
+            text-align: left;
+        }
+
+        .demo-features h4 {
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+            color: var(--leaf-dark);
+        }
+
+        .demo-features ul {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-left: 1.5rem;
+        }
+
+        .demo-features li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Dashboard */
+        #dashboard {
+            display: none;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        .demo-banner {
+            background: linear-gradient(135deg, var(--demo-orange), #d97706);
+            color: white;
+            padding: 1.25rem 2rem;
+            text-align: center;
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .demo-banner h3 {
+            font-size: 1.3rem;
+            margin: 0;
+        }
+
+        .btn-exit {
+            background: white;
+            color: var(--demo-orange);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-exit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--leaf-dark), var(--leaf-mid));
+            color: white;
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-medium);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--demo-orange);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .sensor-card {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-soft);
+            transition: all 0.3s ease;
+        }
+
+        .sensor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .sensor-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .sensor-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .sensor-icon.temp {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .sensor-icon.humidity {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
+
+        .sensor-icon.soil {
+            background: linear-gradient(135deg, var(--leaf-light), var(--leaf-mid));
+        }
+
+        .sensor-value {
+            font-size: 3rem;
+            font-family: 'Fraunces', serif;
+            font-weight: 700;
+            color: var(--leaf-dark);
+            line-height: 1;
+            margin-bottom: 1rem;
+        }
+
+        .sensor-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--cream-dark);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .sensor-bar-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+
+        .sensor-bar-fill.temp {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+        }
+
+        .sensor-bar-fill.humidity {
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+        }
+
+        .sensor-bar-fill.soil {
+            background: linear-gradient(90deg, var(--leaf-light), var(--leaf-mid));
+        }
+
+        .control-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .control-panel {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--cream-dark);
+        }
+
+        .control-item {
+            background: var(--cream);
+            padding: 1.25rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 1rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .control-label {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 32px;
+            background: #cbd5e1;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active {
+            background: var(--leaf-light);
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(28px);
+        }
+
+        .mode-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .mode-btn {
+            padding: 1rem;
+            border: 2px solid var(--cream-dark);
+            background: white;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .mode-btn:hover {
+            border-color: var(--leaf-light);
+        }
+
+        .mode-btn.active {
+            background: var(--leaf-light);
+            color: white;
+            border-color: var(--leaf-light);
+        }
+
+        .alerts-panel {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: start;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--cream);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.75rem;
+            border-left: 4px solid;
+        }
+
+        .alert-item.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .no-alerts {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .chart-panel {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-soft);
+        }
+
+        @media (max-width: 768px) {
+            .demo-banner {
+                flex-direction: column;
+                text-align: center;
+            }
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .sensors-grid,
+            .control-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA DE INICIO -->
+    <div id="startScreen">
+        <div class="start-card">
+            <div class="start-icon">🎮</div>
+            <h1>Modo Demostración</h1>
+            <p class="subtitle">Invernadero Inteligente IoT</p>
+            <p>Explora el dashboard con datos simulados en tiempo real. Perfecto para presentaciones, pruebas y aprendizaje sin necesidad de hardware.</p>
+
+            <button class="btn-start" id="btnStart">
+                <span>🚀</span>
+                <span>Iniciar Demostración</span>
+            </button>
+
+            <div class="demo-features">
+                <h4>✨ Incluye:</h4>
+                <ul>
+                    <li>📊 Datos simulados actualizándose cada 2 segundos</li>
+                    <li>🌡️ Monitoreo de temperatura, humedad y suelo</li>
+                    <li>⚙️ Controles interactivos (simulados)</li>
+                    <li>📈 Gráficos históricos con Chart.js</li>
+                    <li>⚠️ Sistema de alertas automáticas</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard">
+        <!-- Banner Demo -->
+        <div class="demo-banner">
+            <div>
+                <h3>🎮 MODO DEMOSTRACIÓN ACTIVO</h3>
+                <p style="margin: 0; font-size: 0.9rem;">Datos simulados • Sin hardware conectado</p>
+            </div>
+            <button class="btn-exit" id="btnExit">✕ Salir</button>
+        </div>
+
+        <!-- Header -->
+        <div class="dashboard-header">
+            <div class="header-content">
+                <div>
+                    <h1>🌿 Dashboard de Control</h1>
+                    <p>Simulación de Invernadero Inteligente</p>
+                </div>
+                <div class="connection-status">
+                    <div class="status-indicator"></div>
+                    <span>Modo Simulación</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sensores -->
+        <div class="sensors-grid">
+            <div class="sensor-card">
+                <div class="sensor-header">
+                    <div class="sensor-icon temp">🌡️</div>
+                    <div><h3>Temperatura</h3></div>
+                </div>
+                <div class="sensor-value" id="tempValue">25.0°C</div>
+                <div class="sensor-bar">
+                    <div class="sensor-bar-fill temp" id="tempBar" style="width: 40%"></div>
+                </div>
+                <div id="tempStatus">✅ Temperatura óptima</div>
+            </div>
+
+            <div class="sensor-card">
+                <div class="sensor-header">
+                    <div class="sensor-icon humidity">💧</div>
+                    <div><h3>Humedad Ambiental</h3></div>
+                </div>
+                <div class="sensor-value" id="humidityValue">60.0%</div>
+                <div class="sensor-bar">
+                    <div class="sensor-bar-fill humidity" id="humidityBar" style="width: 60%"></div>
+                </div>
+                <div id="humidityStatus">✅ Humedad óptima</div>
+            </div>
+
+            <div class="sensor-card">
+                <div class="sensor-header">
+                    <div class="sensor-icon soil">🌱</div>
+                    <div><h3>Humedad del Suelo</h3></div>
+                </div>
+                <div class="sensor-value" id="soilValue">45.0%</div>
+                <div class="sensor-bar">
+                    <div class="sensor-bar-fill soil" id="soilBar" style="width: 45%"></div>
+                </div>
+                <div id="soilStatus">✅ Humedad del suelo óptima</div>
+            </div>
+        </div>
+
+        <!-- Controles y Alertas -->
+        <div class="control-section">
+            <div class="control-panel">
+                <div class="panel-header">
+                    <span style="font-size: 1.5rem;">⚙️</span>
+                    <h2>Panel de Control</h2>
+                </div>
+
+                <div class="control-item">
+                    <div class="control-header">
+                        <div class="control-label">
+                            <span>💦</span>
+                            <span>Bomba de Agua</span>
+                        </div>
+                        <div class="toggle-switch" id="pumpToggle">
+                            <div class="toggle-slider"></div>
+                        </div>
+                    </div>
+                    <div id="pumpStatus">Estado: Apagada (Simulado)</div>
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label" style="margin-bottom: 1rem;">
+                        <span>🤖</span>
+                        <span>Modo de Operación</span>
+                    </div>
+                    <div class="mode-buttons">
+                        <button class="mode-btn active" id="autoBtn">
+                            <span>🤖</span><span>Automático</span>
+                        </button>
+                        <button class="mode-btn" id="manualBtn">
+                            <span>👆</span><span>Manual</span>
+                        </button>
+                    </div>
+                    <div id="modeStatus" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                        Sistema en modo automático (simulado)
+                    </div>
+                </div>
+            </div>
+
+            <div class="alerts-panel">
+                <div class="panel-header">
+                    <span style="font-size: 1.5rem;">⚠️</span>
+                    <h2>Alertas del Sistema</h2>
+                </div>
+                <div id="alertsList">
+                    <div class="no-alerts">
+                        <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
+                        <p>No hay alertas activas</p>
+                        <p style="font-size: 0.85rem;">Todos los parámetros en rango óptimo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico -->
+        <div class="chart-panel">
+            <div class="panel-header">
+                <span style="font-size: 1.5rem;">📊</span>
+                <h2>Histórico de Datos (Simulado)</h2>
+            </div>
+            <canvas id="dataChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let updateInterval;
+        let chart;
+        let sensorData = { temperature: 25, humidity: 60, soil: 45 };
+        let systemState = { pumpActive: false, mode: 'auto' };
+        let historyData = { labels: [], temperature: [], humidity: [], soil: [] };
+
+        // Iniciar demo
+        document.getElementById('btnStart').addEventListener('click', function() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            initDashboard();
+        });
+
+        // Salir
+        document.getElementById('btnExit').addEventListener('click', function() {
+            if (confirm('¿Salir del modo demostración?')) {
+                if (updateInterval) clearInterval(updateInterval);
+                document.getElementById('dashboard').style.display = 'none';
+                document.getElementById('startScreen').style.display = 'flex';
+            }
+        });
+
+        function initDashboard() {
+            generateHistoricalData();
+            initChart();
+            updateSensorData();
+
+            updateInterval = setInterval(() => {
+                simulateSensorData();
+                updateSensorData();
+                checkAlerts();
+            }, 2000);
+        }
+
+        function simulateSensorData() {
+            sensorData.temperature += (Math.random() - 0.5) * 2;
+            sensorData.temperature = Math.max(15, Math.min(40, sensorData.temperature));
+
+            sensorData.humidity += (Math.random() - 0.5) * 3;
+            sensorData.humidity = Math.max(30, Math.min(90, sensorData.humidity));
+
+            sensorData.soil += (Math.random() - 0.5) * 2.5;
+            sensorData.soil = Math.max(20, Math.min(80, sensorData.soil));
+        }
+
+        function updateSensorData() {
+            const temp = sensorData.temperature.toFixed(1);
+            document.getElementById('tempValue').textContent = temp + '°C';
+            document.getElementById('tempBar').style.width = ((temp - 15) / 25 * 100) + '%';
+            document.getElementById('tempStatus').textContent = temp < 20 ? '❄️ Frío' : temp < 28 ? '✅ Óptimo' : '🔥 Caliente';
+
+            const hum = sensorData.humidity.toFixed(1);
+            document.getElementById('humidityValue').textContent = hum + '%';
+            document.getElementById('humidityBar').style.width = hum + '%';
+            document.getElementById('humidityStatus').textContent = hum < 50 ? '🌵 Seco' : hum < 70 ? '✅ Óptimo' : '💧 Húmedo';
+
+            const soil = sensorData.soil.toFixed(1);
+            document.getElementById('soilValue').textContent = soil + '%';
+            document.getElementById('soilBar').style.width = soil + '%';
+            document.getElementById('soilStatus').textContent = soil < 35 ? '🏜️ Regar pronto' : soil < 60 ? '✅ Óptimo' : '💦 Muy húmedo';
+
+            updateChart();
+        }
+
+        function checkAlerts() {
+            let alerts = [];
+            
+            if (sensorData.temperature > 30) {
+                alerts.push({ type: 'warning', icon: '🌡️', title: 'Temperatura Alta', message: `${sensorData.temperature.toFixed(1)}°C - Considerar ventilación` });
+            }
+            if (sensorData.soil < 30) {
+                alerts.push({ type: 'warning', icon: '💧', title: 'Suelo Seco', message: `${sensorData.soil.toFixed(1)}% - Activar riego` });
+            }
+
+            const container = document.getElementById('alertsList');
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
+                        <p>No hay alertas activas</p>
+                        <p style="font-size: 0.85rem;">Todos los parámetros en rango óptimo</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = alerts.map(a => `
+                    <div class="alert-item ${a.type}">
+                        <div style="font-size: 1.5rem;">${a.icon}</div>
+                        <div>
+                            <h4>${a.title}</h4>
+                            <p style="font-size: 0.9rem; margin: 0.25rem 0;">${a.message}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-muted);">${new Date().toLocaleTimeString()}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function generateHistoricalData() {
+            for (let i = 23; i >= 0; i--) {
+                const time = new Date(Date.now() - i * 60 * 60 * 1000);
+                historyData.labels.push(time.getHours() + ':00');
+                historyData.temperature.push(20 + Math.random() * 10);
+                historyData.humidity.push(50 + Math.random() * 20);
+                historyData.soil.push(40 + Math.random() * 20);
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('dataChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: historyData.labels,
+                    datasets: [
+                        {
+                            label: 'Temperatura (°C)',
+                            data: historyData.temperature,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Humedad Aire (%)',
+                            data: historyData.humidity,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Humedad Suelo (%)',
+                            data: historyData.soil,
+                            borderColor: '#4a7c62',
+                            backgroundColor: 'rgba(74, 124, 98, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: true, position: 'top' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            const now = new Date();
+            const newLabel = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+            
+            historyData.labels.push(newLabel);
+            historyData.temperature.push(sensorData.temperature);
+            historyData.humidity.push(sensorData.humidity);
+            historyData.soil.push(sensorData.soil);
+            
+            if (historyData.labels.length > 24) {
+                historyData.labels.shift();
+                historyData.temperature.shift();
+                historyData.humidity.shift();
+                historyData.soil.shift();
+            }
+            
+            chart.update('none');
+        }
+
+        // Controles (simulados)
+        document.getElementById('pumpToggle').addEventListener('click', function() {
+            if (systemState.mode === 'auto') {
+                alert('ℹ️ En modo automático, la bomba se controla automáticamente.\n\nEsto es una simulación, pero en el ESP32 real no podrías controlarla manualmente en este modo.');
+                return;
+            }
+
+            systemState.pumpActive = !systemState.pumpActive;
+            this.classList.toggle('active', systemState.pumpActive);
+            document.getElementById('pumpStatus').textContent = systemState.pumpActive ? 
+                '💦 Estado: Encendida (Simulado)' : 'Estado: Apagada (Simulado)';
+        });
+
+        document.getElementById('autoBtn').addEventListener('click', () => setMode('auto'));
+        document.getElementById('manualBtn').addEventListener('click', () => setMode('manual'));
+
+        function setMode(mode) {
+            systemState.mode = mode;
+            document.getElementById('autoBtn').classList.toggle('active', mode === 'auto');
+            document.getElementById('manualBtn').classList.toggle('active', mode === 'manual');
+            document.getElementById('modeStatus').textContent = mode === 'auto' ?
+                '🤖 Sistema en modo automático (simulado)' :
+                '👆 Modo manual activo (simulado)';
+        }
+    </script>
+</body>
+</html>
