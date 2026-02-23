@@ -14,7 +14,7 @@
 #define DHTPIN 2              // Pin Digital 2 -> Sensor DHT11
 #define DHTTYPE DHT11         
 #define SOIL_SENSOR_PIN A0    // Pin Analógico A0 -> Sensor Humedad Suelo
-#define RELAY_PIN 3           // Pin Digital 3 -> Módulo Relé
+#define RELAY_PIN 8           // Pin Digital 8 -> Módulo Relé (mismo pin que Bomba_agua.ino)
 
 // ========== CONFIGURACIÓN ==========
 const int UMBRAL_SECO = 30;           // % mínimo para riego automático
