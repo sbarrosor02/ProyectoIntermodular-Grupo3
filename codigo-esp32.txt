@@ -32,6 +32,10 @@ const int UMBRAL_SECO = 30;           // Porcentaje mínimo para activar riego
 const int TIEMPO_RIEGO = 3000;        // Milisegundos de riego (3 segundos)
 const unsigned long INTERVALO_LECTURA = 2000;  // Leer sensores cada 2 segundos
 
+// Lógica de relé (Muchos módulos son Active Low)
+const int BOMBA_ENCENDIDA = LOW;      
+const int BOMBA_APAGADA = HIGH;
+
 // ========== OBJETOS GLOBALES ==========
 DHT dht(DHTPIN, DHTTYPE);
 WebServer server(80);
@@ -64,7 +68,7 @@ void setup() {
     
     // Configurar pines
     pinMode(RELAY_PIN, OUTPUT);
-    digitalWrite(RELAY_PIN, LOW);  // Relé apagado (normalmente LOW = OFF)
+    digitalWrite(RELAY_PIN, BOMBA_APAGADA);  // Asegurar que inicie apagada
     
     // Inicializar sensor DHT11
     dht.begin();
@@ -72,7 +76,7 @@ void setup() {
     
     // Estado inicial del sistema
     sistema.bombaActiva = false;
-    sistema.modo = "auto";
+    sistema.modo = "manual"; // 👈 Cambiado a manual por defecto
     sistema.rigoEnProceso = false;
     sistema.tiempoInicioRiego = 0;
     
@@ -112,13 +116,6 @@ void loop() {
     // Lógica de riego automático
     if (sistema.modo == "auto") {
         controlarRiegoAutomatico();
-    }
-    
-    // Controlar tiempo de riego
-    if (sistema.rigoEnProceso) {
-        if (millis() - sistema.tiempoInicioRiego >= TIEMPO_RIEGO) {
-            apagarBomba();
-        }
     }
 }
 
@@ -180,11 +177,15 @@ void leerSensores() {
 // FUNCIÓN: CONTROL AUTOMÁTICO DE RIEGO
 // ========================================
 void controlarRiegoAutomatico() {
-    // Si el suelo está seco y la bomba no está activa
-    if (sensores.humedadSuelo < UMBRAL_SECO && !sistema.bombaActiva && !sistema.rigoEnProceso) {
-        Serial.println("\n🚨 ALERTA: Suelo seco detectado");
-        Serial.println("💦 Activando riego automático...");
+    // Si el suelo está seco y la bomba no está activa, encender
+    if (sensores.humedadSuelo < UMBRAL_SECO && !sistema.bombaActiva) {
+        Serial.println("\n🚨 ALERTA: Suelo seco detectado. Activando riego...");
         encenderBomba();
+    } 
+    // Si el suelo ya está húmedo (umbral + 10 para evitar encendidos constantes), apagar
+    else if (sensores.humedadSuelo > (UMBRAL_SECO + 10) && sistema.bombaActiva) {
+        Serial.println("\n✅ INFO: Humedad suficiente. Deteniendo riego.");
+        apagarBomba();
     }
 }
 
@@ -192,17 +193,14 @@ void controlarRiegoAutomatico() {
 // FUNCIONES: CONTROL DE BOMBA
 // ========================================
 void encenderBomba() {
-    digitalWrite(RELAY_PIN, HIGH);  // Activar relé
+    digitalWrite(RELAY_PIN, BOMBA_ENCENDIDA);  // Activar relé
     sistema.bombaActiva = true;
-    sistema.rigoEnProceso = true;
-    sistema.tiempoInicioRiego = millis();
     Serial.println("✓ Bomba ENCENDIDA");
 }
 
 void apagarBomba() {
-    digitalWrite(RELAY_PIN, LOW);   // Desactivar relé
+    digitalWrite(RELAY_PIN, BOMBA_APAGADA);   // Desactivar relé
     sistema.bombaActiva = false;
-    sistema.rigoEnProceso = false;
     Serial.println("✓ Bomba APAGADA");
 }
 

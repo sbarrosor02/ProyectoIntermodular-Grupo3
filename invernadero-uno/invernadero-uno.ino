@@ -21,6 +21,10 @@ const int UMBRAL_SECO = 30;           // % mínimo para riego automático
 const int TIEMPO_RIEGO = 3000;        // 3 segundos de riego
 const unsigned long INTERVALO_LECTURA = 2000; 
 
+// Lógica de relé (Muchos módulos son Active Low)
+const int BOMBA_ENCENDIDA = LOW;      
+const int BOMBA_APAGADA = HIGH;
+
 // ========== VARIABLES GLOBALES ==========
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -42,13 +46,13 @@ void setup() {
     Serial.begin(9600); // Velocidad estándar para Arduino Uno
     
     pinMode(RELAY_PIN, OUTPUT);
-    digitalWrite(RELAY_PIN, LOW); // Apagado por defecto
+    digitalWrite(RELAY_PIN, BOMBA_APAGADA); // Asegurar que inicie apagada
     
     dht.begin();
     
     // Estado inicial
     sistema.bombaActiva = false;
-    sistema.modoAutomatico = true;
+    sistema.modoAutomatico = false; // 👈 Cambiado a manual (false) por defecto
     sistema.riegoEnProceso = false;
 }
 
@@ -70,13 +74,6 @@ void loop() {
     // 3. Lógica de Riego
     if (sistema.modoAutomatico) {
         controlarRiegoAutomatico();
-    }
-
-    // 4. Control de tiempo de la bomba
-    if (sistema.riegoEnProceso) {
-        if (millis() - sistema.tiempoInicioRiego >= TIEMPO_RIEGO) {
-            apagarBomba();
-        }
     }
 }
 
@@ -113,23 +110,23 @@ void mostrarDatosConsola() {
 }
 
 void controlarRiegoAutomatico() {
-    if (sensores.humedadSuelo < UMBRAL_SECO && !sistema.bombaActiva && !sistema.riegoEnProceso) {
+    if (sensores.humedadSuelo < UMBRAL_SECO && !sistema.bombaActiva) {
         Serial.println(F("! Alerta: Suelo seco. Iniciando riego..."));
         encenderBomba();
+    } else if (sensores.humedadSuelo > (UMBRAL_SECO + 10) && sistema.bombaActiva) {
+        Serial.println(F("! Info: Humedad recuperada. Deteniendo riego."));
+        apagarBomba();
     }
 }
 
 void encenderBomba() {
-    digitalWrite(RELAY_PIN, HIGH);
+    digitalWrite(RELAY_PIN, BOMBA_ENCENDIDA);
     sistema.bombaActiva = true;
-    sistema.riegoEnProceso = true;
-    sistema.tiempoInicioRiego = millis();
 }
 
 void apagarBomba() {
-    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(RELAY_PIN, BOMBA_APAGADA);
     sistema.bombaActiva = false;
-    sistema.riegoEnProceso = false;
 }
 
 // Envía los datos en formato JSON para que la web los procese
